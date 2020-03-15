@@ -45,7 +45,7 @@ class _MediaKeyListener:
         if self.stop_flag.is_set():          # in case thread is being stopped
             return
 
-        print("Starting windows key-down hook (listener) loop.")
+        print("Starting windows hotkey listener ...")
         try:
             msg = ctypes.wintypes.MSG()
 
@@ -57,11 +57,11 @@ class _MediaKeyListener:
             while not self.stop_flag.is_set() and ctypes.windll.user32.GetMessageA(ctypes.byref(msg), None, 0, 0) != 0:
                 if msg.message == self.WM_HOTKEY:
                     # process -> call handler
-                    print("Message:", msg.wParam)
+                    # print("Message:", msg.wParam)
                     hotkey_enum = self.WM_HOTKEYS_mapping[msg.wParam]
                     self.message_queue.put(hotkey_enum)         # send a message to sender
 
-            print("Killing win32 listen timer...")
+            print("Stopping win32 hotkey listener...")
             ctypes.windll.user32.KillTimer(None, timer_id)
             ctypes.windll.user32.TranslateMessage(ctypes.byref(msg))
             ctypes.windll.user32.DispatchMessageA(ctypes.byref(msg))
@@ -111,42 +111,40 @@ class _MediaKeyListener:
 
 class MediaKeyListener:
 
-    def __init__(self):
-        self.listener = _MediaKeyListener()
+    def __init__(self, msg_queue):
+        self.listener = _MediaKeyListener(msg_queue)
         self.listener_thread = threading.Thread(target=self.listener.start_listening, name="HotkeyListenerThread")
 
     def start(self):
-        print("Starting...")
+        print("Starting MediaKeyListener ...")
         self.listener.reset()
         self.listener_thread.start()
 
     def stop(self):
         self.listener.stop_listening()
         self.listener_thread.join()
-        print("Stopped")
+        print("MediaKeyListener stopped")
 
 
 class _Sender:
     def __init__(self, ip, port, msg_queue: queue.Queue):
         self.stop_flag = threading.Event()
 
-        self.ip = ip
+        self.host_ip = ip
         self.port = port
         self.msg_queue = msg_queue
 
     def start_sending(self):
 
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-            # s.connect((self.ip, self.port))
+            s.connect((self.host_ip, self.port))
+            print(f"Connected to server host {self.host_ip}:{self.port}")
 
             while not self.stop_flag.is_set():
                 key_enum = self.msg_queue.get(block=True)
-                print(key_enum)
-
-            # for i in range(5):
-            #     s.sendall(str(key_enums.Keys.PLAYPAUSE_DOWN).encode())
-            #     s.sendall(str(key_enums.Keys.PLAYPAUSE_UP).encode())
-            #     time.sleep(2)
+                if key_enum is not None:
+                    # print(f"sending key id: {key_enum}")
+                    s.sendall(str(key_enum).encode())
 
     def stop_sending(self):
         self.stop_flag.set()
@@ -164,25 +162,31 @@ class Sender:
         self.sender_thread = threading.Thread(target=self.sender.start_sending, name="SenderThread")
 
     def start(self):
+        print("Starting Sender ...")
         self.sender.reset()
         self.sender_thread.start()
 
     def stop(self):
         self.sender.stop_sending()
         self.sender_thread.join()
+        print("Sender stopped")
 
 
 if __name__ == '__main__':
-    HOST = '127.0.0.1'  # Standard loopback interface address (localhost)
-    PORT = 65433        # Port to listen on (non-privileged ports are > 1023)
+    HOST = '127.0.0.1'          # use localhost and use vmware portforwarding to avoid host firewall
+    PORT = 65433
+
     QUEUE = queue.Queue(1024)
 
-    # m = MediaKeyListener()
-    # m.start()
-    # time.sleep(10)
-    # m.stop()
+    key_listener = MediaKeyListener(QUEUE)
+    key_listener.start()
 
     sender = Sender(HOST, PORT, QUEUE)
     sender.start()
-    time.sleep(10)
+
+    time.sleep(0.5)
+
+    i = input("\nListening, press key to stop ... \n")
+
+    key_listener.stop()
     sender.stop()
