@@ -85,7 +85,7 @@ class KeyListener:
 
 
 if __name__ == '__main__':
-    HOST = '192.168.192.128'
+    HOST = '192.168.192.128'        # default vmware NAT address
     PORT = 65433
 
     incoming_listener = KeyListener(HOST, PORT)
