@@ -63,7 +63,12 @@ class KeyListener:
                     with KeySender() as key_sender:
                         print('Connected client from', addr)
                         while True:
-                            data = conn.recv(64)
+                            try:
+                                data = conn.recv(64)
+                            except ConnectionResetError:
+                                print("Connection terminated by client the hard way!")
+                                break
+
                             if data:
                                 self.process_data(key_sender, data)
                             else:
