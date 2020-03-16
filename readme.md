@@ -53,9 +53,13 @@ Most importantly you need to figure out your communication between host and gues
 
 #### Setup udev for evdev:
 
-You need to allow `evdev` package to interact with `udev`. Enable user to access `udev`:
+You need to allow `evdev` package to interact with `udev`. Enable user to access `udev` by writting 
+```
+KERNEL=="uinput", TAG+="uaccess"
+```
+to
 ```bash
-$ sudo echo 'KERNEL=="uinput", TAG+="uaccess' > /etc/udev/rules.d/50-uinput.rules
+$ sudo nano /etc/udev/rules.d/50-uinput.rules
 ```
 
 ## Example localhost-only communication with VMWare
