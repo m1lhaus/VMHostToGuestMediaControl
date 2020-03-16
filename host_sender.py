@@ -35,6 +35,13 @@ class _MediaKeyListener:
             4: key_enums.Keys.PREV,
         }
 
+        self.WM_HOTKEYS_str = {
+            1: "PLAYPAUSE",
+            2: "STOP",
+            3: "NEXT",
+            4: "PREV",
+        }
+
     def start_listening(self):
         """
         Thread worker. Called when thread is executed.
@@ -57,7 +64,7 @@ class _MediaKeyListener:
             while not self.stop_flag.is_set() and ctypes.windll.user32.GetMessageA(ctypes.byref(msg), None, 0, 0) != 0:
                 if msg.message == self.WM_HOTKEY:
                     # process -> call handler
-                    # print("Message:", msg.wParam)
+                    print("Caught hotkey:", self.WM_HOTKEYS_str[msg.wParam])
                     hotkey_enum = self.WM_HOTKEYS_mapping[msg.wParam]
                     self.message_queue.put(hotkey_enum)         # send a message to sender
 
@@ -135,16 +142,22 @@ class _Sender:
         self.msg_queue = msg_queue
 
     def start_sending(self):
+        def _start_sending():
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+                s.connect((self.host_ip, self.port))
+                print(f"Connected to server host {self.host_ip}:{self.port}")
 
-        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-            s.connect((self.host_ip, self.port))
-            print(f"Connected to server host {self.host_ip}:{self.port}")
+                while not self.stop_flag.is_set():
+                    key_enum = self.msg_queue.get(block=True)
+                    if key_enum is not None:
+                        # print(f"sending key id: {key_enum}")
+                        s.sendall(str(key_enum).encode())
 
-            while not self.stop_flag.is_set():
-                key_enum = self.msg_queue.get(block=True)
-                if key_enum is not None:
-                    # print(f"sending key id: {key_enum}")
-                    s.sendall(str(key_enum).encode())
+        while not self.stop_flag.is_set():
+            try:
+                _start_sending()
+            except ConnectionAbortedError:      # if client is not running or was terminated
+                print("Client is dead, reconnecting")
 
     def stop_sending(self):
         self.stop_flag.set()
